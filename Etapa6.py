@@ -340,6 +340,41 @@ def busca_local(solucao_inicial, units_df, emergencies_df):
     
     return solucao_atual
 
+def busca_local_2opt(solucao_inicial, units_df, emergencies_df):
+    """
+    Busca Local com movimento 2-opt dentro de cada rota individual.
+    """
+    solucao = copy.deepcopy(solucao_inicial)
+    melhorou = True
+
+    while melhorou:
+        melhorou = False
+        for unidade, rota in solucao.items():
+            rota_melhor = rota.copy()
+            melhor_dist = rota_dist(units_df, emergencies_df, unidade, rota_melhor)
+            n = len(rota_melhor)
+            for i in range(n - 1):
+                for j in range(i + 2, n):
+                    nova_rota = rota_melhor[:i+1] + rota_melhor[i+1:j+1][::-1] + rota_melhor[j+1:]
+                    nova_dist = rota_dist(units_df, emergencies_df, unidade, nova_rota)
+                    if nova_dist < melhor_dist:
+                        rota_melhor = nova_rota
+                        melhor_dist = nova_dist
+                        melhorou = True
+            solucao[unidade] = rota_melhor
+    return solucao
+
+def rota_dist(units_df, emergencies_df, unidade, rota):
+    """Calcula a distância total de uma rota individual"""
+    unidade_pos = units_df[units_df['unit_id'] == unidade][['x', 'y']].iloc[0].values
+    total = 0
+    pos_atual = unidade_pos
+    for em_id in rota:
+        pos_em = emergencies_df[emergencies_df['emergency_id'] == em_id][['x', 'y']].iloc[0].values
+        total += np.linalg.norm(pos_em - pos_atual)
+        pos_atual = pos_em
+    return total
+
 
 def grasp_com_busca_local(units_df, emergencies_df, max_iterations=10, alpha=0.3):
     """
@@ -475,7 +510,7 @@ def comparar_solucoes_greedy(units_df, emergencies_df):
 
     # Gulosa + Busca Local
     print("FASE 2: Refinando a mesma solução com Busca Local...")
-    greedy_refinado = busca_local(greedy_inicial, units_df, emergencies_df)
+    greedy_refinado = busca_local_2opt(greedy_inicial, units_df, emergencies_df)
     dist_refinada = calcular_distancia_total(units_df, emergencies_df, greedy_refinado)
     print(f"  > Distância após Busca Local: {dist_refinada:.2f}")
 
