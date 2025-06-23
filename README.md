@@ -8,30 +8,40 @@ Este projeto implementa e compara diferentes heurísticas para o problema de rot
 
 O sistema permite:
 * Carregar dados de unidades e emergências via arquivos CSV ou inserção manual.
-* Aplicar e comparar quatro heurísticas distintas para atribuir emergências a unidades e definir suas rotas:
+* Aplicar e comparar múltiplas heurísticas para atribuir emergências a unidades e definir suas rotas:
     * **Greedy**: Atribui cada emergência à unidade mais próxima no momento.
+    * **Greedy com Busca Local**: Extensão do Greedy, aplicando uma Busca Local para refinar a solução inicial.
     * **Nearest Neighbor (NN)**: Cada unidade atende a emergência mais próxima sequencialmente até que todas as emergências sejam atribuídas.
+    * **Nearest Neighbor com Busca Local**: Extensão do NN, aplicando uma Busca Local para melhorar a solução inicial.
     * **GRASP (Greedy Randomized Adaptive Search Procedure)**: Uma meta-heurística que combina uma fase construtiva gulosa-randomizada com uma busca local.
-    * **GRASP com Busca Local (2-opt)**: Uma versão aprimorada do GRASP que aplica uma Busca Local (o algoritmo 2-opt) a cada rota gerada para otimizá-las ainda mais.
+    * **GRASP com Busca Local**: Uma versão aprimorada do GRASP que aplica uma Busca Local para otimizar ainda mais.
 * Calcular a distância total percorrida por todas as unidades para uma dada solução.
 * Visualizar graficamente as rotas atribuídas, com cada unidade e suas emergências em cores distintas.
 * Gerar arquivos CSV com os detalhes das rotas encontradas por cada heurística.
+* Comparar lado a lado as versões com e sem Busca Local de cada heurística (Greedy vs Greedy + BL, GRASP vs GRASP + BL, NN vs NN + BL) com gráficos e relatórios automáticos.
 
 ## Heurísticas Implementadas
 
 ### 1. Greedy
 Uma abordagem simples onde, a cada passo, a emergência ainda não atendida é atribuída à unidade que estiver mais próxima dela no momento. A unidade, após atender a emergência, tem sua "posição atual" atualizada para a localização da emergência recém-atendida.
 
-### 2. Nearest Neighbor (NN)
+### 2. Greedy com Busca Local
+Extende a heurística Greedy básica aplicando uma fase de Busca Local para melhorar a solução inicial, realocando emergências entre unidades quando resulta em menor custo total.
+
+### 3. Nearest Neighbor (NN)
 Similar ao Greedy, mas a atribuição é feita focando em cada unidade individualmente. Cada unidade busca a próxima emergência mais próxima para atender, e esse processo se repete até que todas as emergências sejam atribuídas.
 
-### 3. GRASP (Greedy Randomized Adaptive Search Procedure)
+### 4. Nearest Neighbor com Busca Local
+Extende a heurística NN aplicando uma Busca Local após a construção inicial, permitindo a troca de emergências entre unidades para reduzir o custo total.
+
+### 5. GRASP (Greedy Randomized Adaptive Search Procedure)
 O GRASP opera em duas fases principais:
 * **Fase de Construção**: De forma iterativa, constrói uma solução inicial viável. Para cada atribuição, é criada uma Lista Restrita de Candidatos (RCL) com base na proximidade. Um candidato é escolhido aleatoriamente dessa RCL, introduzindo um elemento de aleatoriedade que permite explorar diferentes "bons" caminhos. O parâmetro `alpha` controla o grau de aleatoriedade na formação da RCL.
 * **Fase de Busca Local**: (Opcional, mas presente na versão `grasp_bl`) Melhora a solução construída. A solução é explorada em sua vizinhança para encontrar uma solução melhor.
 
-### 4. GRASP com Busca Local (2-opt)
-Esta versão estende o GRASP tradicional ao incorporar uma etapa de Busca Local usando o algoritmo 2-opt. Após a fase de construção gulosa-randomizada do GRASP, cada rota individual de cada unidade é submetida a um processo de otimização 2-opt.
+### 6. GRASP com Busca Local
+Esta versão estende o GRASP tradicional ao incorporar uma etapa de Busca Local. Após a fase de construção gulosa-randomizada do GRASP, cada rota é submetida a um processo de otimização que permite realocação de emergências entre unidades para reduzir o custo total.
+
 
 #### Algoritmo 2-opt
 O 2-opt é uma heurística de busca local comumente utilizada para problemas de roteamento (como o Problema do Caixeiro Viajante - TSP). Ele funciona da seguinte maneira:
