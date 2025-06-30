@@ -3,10 +3,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import copy
+import time
+from collections import defaultdict
+
+execution_times = defaultdict(list)
+
+def measure_time(func):
+    # Decorator que registra o tempo de execução dos métodos
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        elapsed = time.perf_counter() - start
+        execution_times[func.__name__].append(elapsed)
+        print(f"[Timing] {func.__name__} levou {elapsed:.6f} s")
+        return result
+    return wrapper
 
 # FUNÇÕES DE VISUALIZAÇÃO E COMPARAÇÃO (sem alterações significativas)
 
-def plot_rotas(units_df, emergencies_df, routes):
+def plot_rotas(units_df, emergencies_df, routes, total_dist, method_name="Rotas atribuídas", elapsed=None):
     """Visualiza as rotas atribuídas graficamente."""
     plt.figure(figsize=(10, 8))
     cores = plt.cm.get_cmap('tab10', len(units_df))
@@ -28,8 +43,12 @@ def plot_rotas(units_df, emergencies_df, routes):
         plt.plot(rota_x, rota_y, marker='o', color=cores(i), label=f'Unidade {unit_id}')
         plt.scatter(x_unit, y_unit, color=cores(i), marker='s', s=100, edgecolors='black')
 
+    title = method_name
+    if elapsed is not None:
+        title += f"\nDistância Total: {total_dist:.2f} (Tempo: {elapsed:.3f}s)"
+    plt.title(title)
+
     plt.scatter(emergencies_df['x'], emergencies_df['y'], color='lightgray', marker='x', label='Emergências')
-    plt.title('Rotas atribuídas às unidades')
     plt.xlabel('Coordenada X')
     plt.ylabel('Coordenada Y')
     plt.grid(True)
@@ -71,24 +90,40 @@ def comparar_solucoes(units_df, emergencies_df):
         ax.legend()
 
     # Solução Greedy
+    t0 = time.perf_counter()
     greedy = construct_initial_solution(units_df, emergencies_df)
+    tg = time.perf_counter() - t0
+
     dist_greedy = calcular_distancia_total(units_df, emergencies_df, greedy)
-    plot_subplot(axs[0, 0], f"Gulosa (Dist: {dist_greedy:.2f})", greedy)
+    print(f"[Timing] greedy levou {tg:.6f}s")
+    plot_subplot(axs[0, 0], f"Gulosa\nDist: {dist_greedy:.2f}  Tempo: {tg:.3f}s", greedy)
 
     # Solução GRASP (sem busca local)
+    t0 = time.perf_counter()
     grasp = construct_grasp_solution(units_df, emergencies_df, alpha=0.3)
+    tg = time.perf_counter() - t0
+
     dist_grasp = calcular_distancia_total(units_df, emergencies_df, grasp)
-    plot_subplot(axs[0, 1], f"GRASP (Dist: {dist_grasp:.2f})", grasp)
+    print(f"[Timing] grasp levou {tg:.6f}s")
+    plot_subplot(axs[0, 1], f"GRASP\nDist: {dist_grasp:.2f}  Tempo: {tg:.3f}s", grasp)
 
     # Solução Nearest Neighbor
+    t0 = time.perf_counter()
     nn = construct_nearest_neighbor_solution(units_df, emergencies_df)
+    tn = time.perf_counter() - t0
+
     dist_nn = calcular_distancia_total(units_df, emergencies_df, nn)
-    plot_subplot(axs[1, 0], f"Nearest Neighbor (Dist: {dist_nn:.2f})", nn)
+    print(f"[Timing] nn levou {tn:.6f}s")
+    plot_subplot(axs[1, 0], f"NN\nDist: {dist_nn:.2f}  Tempo: {tg:.3f}s", nn)
     
     # {NOVO} Solução GRASP com Busca Local
+    t0 = time.perf_counter()
     grasp_ls = grasp_com_busca_local(units_df, emergencies_df, max_iterations=5, alpha=0.3)
+    tg = time.perf_counter() - t0
+
     dist_grasp_ls = calcular_distancia_total(units_df, emergencies_df, grasp_ls)
-    plot_subplot(axs[1, 1], f"GRASP + Busca Local (Dist: {dist_grasp_ls:.2f})", grasp_ls)
+    print(f"[Timing] GRASP + Busca Local levou {tg:.6f}s")
+    plot_subplot(axs[1, 1], f"GRASP + Busca Local\nDist: {dist_grasp_ls:.2f}  Tempo: {tg:.3f}s", grasp_ls)
 
     plt.suptitle("Comparação de Heurísticas", fontsize=16)
     plt.savefig("comparacao_solucoes.png")
@@ -197,6 +232,7 @@ def calcular_distancia_total(units_df, emergencies_df, routes):
             pos_atual = pos_em
     return total
 
+@measure_time
 def construct_initial_solution(units_df, emergencies_df):
     """Heurística gulosa: atribui cada emergência à unidade mais próxima no momento."""
     pending = emergencies_df.copy()
@@ -230,6 +266,7 @@ def construct_initial_solution(units_df, emergencies_df):
 
     return routes
 
+@measure_time
 def construct_grasp_solution(units_df, emergencies_df, alpha=0.3):
     """Fase de construção GRASP: utiliza lista restrita de candidatos (RCL) baseada em alpha."""
     pending = emergencies_df.copy()
@@ -263,6 +300,7 @@ def construct_grasp_solution(units_df, emergencies_df, alpha=0.3):
 
     return routes
 
+@measure_time
 def construct_nearest_neighbor_solution(units_df, emergencies_df):
     """Heurística Nearest Neighbor para cada unidade até esgotar emergências."""
     pending = emergencies_df.copy()
@@ -375,7 +413,7 @@ def rota_dist(units_df, emergencies_df, unidade, rota):
         pos_atual = pos_em
     return total
 
-
+@measure_time
 def grasp_com_busca_local(units_df, emergencies_df, max_iterations=10, alpha=0.3):
     """
     Executa o algoritmo GRASP completo: construção + busca local.
@@ -406,6 +444,7 @@ def grasp_com_busca_local(units_df, emergencies_df, max_iterations=10, alpha=0.3
     print(f"\nGRASP com Busca Local concluído. Melhor distância: {melhor_distancia_geral:.2f}")
     return melhor_solucao_geral
 
+@measure_time
 def gulosa_com_busca_local(units_df, emergencies_df):
     """
     Executa a heurística Gulosa + Busca Local:
@@ -435,6 +474,7 @@ def gulosa_com_busca_local(units_df, emergencies_df):
 
     return solucao_refinada
 
+@measure_time
 def nn_com_busca_local(units_df, emergencies_df):
     """
     Executa a heurística Nearest Neighbor + Busca Local:
@@ -611,14 +651,17 @@ def comparar_solucoes_nn(units_df, emergencies_df):
 
 # FUNÇÕES DE ENTRADA DE DADOS E EXECUÇÃO PRINCIPAL
 
-def salvar_rotas_csv(routes, caminho='rotas_resultado.csv'):
-    """Salva as rotas em um arquivo CSV."""
+def salvar_rotas_csv(routes, caminho='rotas_resultado.csv', elapsed=None):
+    #Salva as rotas em um arquivo CSV
     with open(caminho, 'w', encoding='utf-8') as f:
         f.write("unidade_id,emergencias_atendidas\n")
         for unit, ems in routes.items():
             # Formata a lista de emergências como uma string separada por ponto e vírgula
             ems_str = ";".join(map(str, ems))
-            f.write(f'"{unit}","{ems_str}"\n')
+            if elapsed is not None:
+                f.write(f'"{unit}","{ems_str}",{elapsed:.6f}\n')
+            else:
+                f.write(f'"{unit}","{ems_str}"\n')
     print(f"\nRotas salvas em formato CSV: {caminho}")
 
 def input_units():
@@ -671,72 +714,117 @@ if __name__ == "__main__":
     print("\nEscolha o método:")
     print("  1 - greedy            -> Heurística Gulosa")
     print("  2 - greedy_bl         -> Gulosa + Busca Local")
-    print("  3 - grasp             -> GRASP")
-    print("  4 - grasp_bl          -> GRASP + Busca Local")
-    print("  5 - nn                -> Nearest Neighbor")
-    print("  6 - todos             -> Comparar todas heurísticas")
-    print("  7 - grasp_e_grasp_bl  -> Comparar GRASP e GRASP + BL")
-    print("  8 - greedy_e_greedy_bl  -> Comparar Gulosa e Gulosa + BL")
-    print("  9 - nn_bl             -> Nearest Neighbor + Busca Local")
-    print(" 10 - nn_e_nn_bl        -> Comparar Nearest Neighbor e Nearest Neighbor + BL")
+    print("  3 - greedy_e_greedy_bl  -> Comparar Gulosa e Gulosa + BL")
+    print("  4 - grasp             -> GRASP")
+    print("  5 - grasp_bl          -> GRASP + Busca Local")
+    print("  6 - grasp_e_grasp_bl  -> Comparar GRASP e GRASP + BL")
+    print("  7 - nn                -> Nearest Neighbor")
+    print("  8 - nn_bl             -> Nearest Neighbor + Busca Local")
+    print("  9 - nn_e_nn_bl        -> Comparar Nearest Neighbor e Nearest Neighbor + BL")
+    print("  10 - todos             -> Comparar todas heurísticas")
 
     opcao = input("Digite o número da opção desejada: ").strip()
 
     opcoes_map = {
 				"1": "greedy",
 				"2": "greedy_bl",
-				"3": "grasp",
-				"4": "grasp_bl",
-				"5": "nn",
-				"6": "todos",
-				"7": "grasp_e_grasp_bl",
-        "8": "greedy_e_greedy_bl",
-        "9": "nn_bl",
-        "10": "nn_e_nn_bl"
-		}
+                "3": "greedy_e_greedy_bl",
+				"4": "grasp",
+				"5": "grasp_bl",
+				"6": "grasp_e_grasp_bl",
+				"7": "nn",
+                "8": "nn_bl",
+                "9": "nn_e_nn_bl",
+				"10": "todos",
+                }
 
     metodo = opcoes_map.get(opcao, "greedy")  # Se digitar errado, vai usar 'greedy'
     print(f"\nMétodo selecionado: {metodo}")
 
     routes = None
+    elapsed = None
+    method_label = None
     
     if metodo == 'greedy':
+        method_label = "Gulosa"
+        t0 = time.perf_counter()
         routes = construct_initial_solution(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
+
     elif metodo == 'grasp':
+        method_label = "GRASP"
+        t0 = time.perf_counter()
         routes = construct_grasp_solution(units_df, emergencies_df, alpha=0.3)
+        elapsed = time.perf_counter() - t0
+        
     elif metodo == 'nn':
+        method_label = "Nearest Neighbor"
+        t0 = time.perf_counter()
         routes = construct_nearest_neighbor_solution(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
+
     elif metodo == 'grasp_bl':
+        method_label = "Grasp + Busca Local"
         max_iter = int(input("  Número de iterações para o GRASP: "))
         alpha_val = float(input("  Valor de alpha para o GRASP (ex: 0.3): "))
+        t0 = time.perf_counter()
         routes = grasp_com_busca_local(units_df, emergencies_df, max_iterations=max_iter, alpha=alpha_val)
+        elapsed = time.perf_counter() - t0
+
     elif metodo == 'greedy_bl':
-        routes = gulosa_com_busca_local(units_df, emergencies_df) 
+        method_label = "Greedy + Busca Local"
+        t0 = time.perf_counter()
+        routes = gulosa_com_busca_local(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
+
     elif metodo == 'grasp_e_grasp_bl':
+        method_label = "GRASP X GRASP + BL"
+        t0 = time.perf_counter()
         routes = comparar_solucoes_grasp(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
     elif metodo == 'greedy_e_greedy_bl':
+        method_label = "Gulosa X Gulosa + BL"
+        t0 = time.perf_counter()
         comparar_solucoes_greedy(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
     elif metodo == 'nn_bl':
+        method_label = "Nearest Neighbor + Busca Local"
+        t0 = time.perf_counter()
         routes = nn_com_busca_local(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
     elif metodo == 'nn_e_nn_bl':
+        method_label = "Nearest Neighbor X Nearest Neighbor + BL"
+        t0 = time.perf_counter()
         comparar_solucoes_nn(units_df, emergencies_df)
+        elapsed = time.perf_counter() - t0
     elif metodo == 'todos':
+
         comparar_solucoes(units_df, emergencies_df)
     else:
         print("Método inválido. Usando 'greedy' por padrão.")
         routes = construct_initial_solution(units_df, emergencies_df)
 
     # Se um método que retorna uma única rota foi escolhido, exibe os resultados
+
     if routes is not None:
         print("\nRotas atribuídas:")
         for unit, route in routes.items():
             print(f"  Unidade {unit}: emergências {route}")
         
-        salvar_rotas_csv(routes, f'rotas_{metodo}.csv')
+        salvar_rotas_csv(routes, f'rotas_{metodo}.csv', elapsed=elapsed)
         
-        total_distancia = calcular_distancia_total(units_df, emergencies_df, routes)
-        print(f"\nDistância total percorrida ({metodo}): {total_distancia:.2f}")
-        
-        plot_rotas(units_df, emergencies_df, routes)
+        print(f"[Timing] {metodo} levou {elapsed:.6f}s")
+        total_dist = calcular_distancia_total(units_df, emergencies_df, routes)
+        print(f"\nDistância total ({method_label}): {total_dist:.2f}")
+
+        # chama o plot passando o tempo e o rótulo
+        plot_rotas(
+            units_df,
+            emergencies_df,
+            routes,
+            total_dist,
+            method_name=method_label,
+            elapsed=elapsed
+        )
 
     print("\nProcesso concluído.")
