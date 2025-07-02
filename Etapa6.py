@@ -402,6 +402,24 @@ def busca_local_2opt(solucao_inicial, units_df, emergencies_df):
             solucao[unidade] = rota_melhor
     return solucao
 
+def perturbar_solucao(routes):
+    import random
+    from copy import deepcopy
+
+    nova_solucao = deepcopy(routes)
+    unidades = list(nova_solucao.keys())
+
+    for _ in range(10):  # tenta no máximo 10 vezes encontrar duas unidades com emergências
+        u1, u2 = random.sample(unidades, 2)
+        if nova_solucao[u1] and nova_solucao[u2]:
+            i1 = random.randrange(len(nova_solucao[u1]))
+            i2 = random.randrange(len(nova_solucao[u2]))
+            # swap entre emergências
+            nova_solucao[u1][i1], nova_solucao[u2][i2] = nova_solucao[u2][i2], nova_solucao[u1][i1]
+            break
+
+    return nova_solucao
+
 def rota_dist(units_df, emergencies_df, unidade, rota):
     """Calcula a distância total de uma rota individual"""
     unidade_pos = units_df[units_df['unit_id'] == unidade][['x', 'y']].iloc[0].values
@@ -503,7 +521,6 @@ def nn_com_busca_local(units_df, emergencies_df):
         print("  Nenhuma melhoria encontrada pela Busca Local.")
 
     return solucao_refinada
-
 
 def comparar_solucoes_greedy(units_df, emergencies_df):
     """
@@ -649,6 +666,39 @@ def comparar_solucoes_nn(units_df, emergencies_df):
     salvar_rotas_csv(nn_inicial, 'rotas_nn_inicial.csv')
     salvar_rotas_csv(nn_refinado, 'rotas_nn_refinado_com_bl.csv')
 
+def ils(units_df, emergencies_df,
+        construcao_func,
+        busca_local_func,
+        perturbar_func,
+        max_iter=30):
+    
+    from copy import deepcopy
+
+    solucao_inicial = construcao_func(units_df, emergencies_df)
+    solucao_local = busca_local_func(solucao_inicial, units_df, emergencies_df)
+    melhor_solucao = deepcopy(solucao_local)
+    melhor_custo = calcular_distancia_total(units_df, emergencies_df, melhor_solucao)
+
+    historico = [melhor_custo]
+
+    for i in range(max_iter):
+        solucao_perturbada = perturbar_func(melhor_solucao)
+        solucao_aprimorada = busca_local_func(solucao_perturbada, units_df, emergencies_df)
+        custo_aprimorado = calcular_distancia_total(units_df, emergencies_df, solucao_aprimorada)
+
+        if custo_aprimorado < melhor_custo:
+            melhor_solucao = deepcopy(solucao_aprimorada)
+            melhor_custo = custo_aprimorado
+            print(f"[{i+1}] ✅ Melhorou: {melhor_custo:.2f}")
+        else:
+            print(f"[{i+1}] 🔁 Sem melhora")
+
+        historico.append(melhor_custo)
+
+    return melhor_solucao, historico  # ✅ Corrigido aqui!
+
+
+
 # FUNÇÕES DE ENTRADA DE DADOS E EXECUÇÃO PRINCIPAL
 
 def salvar_rotas_csv(routes, caminho='rotas_resultado.csv', elapsed=None):
@@ -721,7 +771,10 @@ if __name__ == "__main__":
     print("  7 - nn                -> Nearest Neighbor")
     print("  8 - nn_bl             -> Nearest Neighbor + Busca Local")
     print("  9 - nn_e_nn_bl        -> Comparar Nearest Neighbor e Nearest Neighbor + BL")
-    print("  10 - todos             -> Comparar todas heurísticas")
+    print("  10 - ils_greedy       -> ILS com Gulosa")
+    print("  11 - ils_grasp        -> ILS com GRASP")
+    print("  12 - ils_nn           -> ILS com Nearest Neighbor")
+    print("  13 - todos            -> Comparar todas heurísticas")
 
     opcao = input("Digite o número da opção desejada: ").strip()
 
@@ -735,7 +788,10 @@ if __name__ == "__main__":
 				"7": "nn",
                 "8": "nn_bl",
                 "9": "nn_e_nn_bl",
-				"10": "todos",
+                "10": "ils_greedy",
+                "11": "ils_grasp",
+				"12": "ils_nn",
+                "13": "todos",
                 }
 
     metodo = opcoes_map.get(opcao, "greedy")  # Se digitar errado, vai usar 'greedy'
@@ -798,8 +854,41 @@ if __name__ == "__main__":
         comparar_solucoes_nn(units_df, emergencies_df)
         elapsed = time.perf_counter() - t0
     elif metodo == 'todos':
-
         comparar_solucoes(units_df, emergencies_df)
+    elif metodo == "ils_grasp":
+        method_label = "ILS (com GRASP)"
+        t0 = time.perf_counter()
+        routes, _ = ils(
+            units_df, emergencies_df,
+            construcao_func=lambda u, e: construct_grasp_solution(u, e, alpha=0.3),
+            busca_local_func=busca_local,
+            perturbar_func=perturbar_solucao,
+            max_iter=30
+        )
+        elapsed = time.perf_counter() - t0
+
+    elif metodo == "ils_greedy":
+        method_label = "ILS (com Greedy)"
+        t0 = time.perf_counter()
+        routes, _ = ils(
+            units_df, emergencies_df,
+            construcao_func=construct_initial_solution,
+            busca_local_func=busca_local,
+            perturbar_func=perturbar_solucao,
+            max_iter=30
+        )
+        elapsed = time.perf_counter() - t0
+    elif metodo == "ils_nn":
+        method_label = "ILS (com Nearest Neighbor)"
+        t0 = time.perf_counter()
+        routes, _ = ils(
+            units_df, emergencies_df,
+            construcao_func=construct_nearest_neighbor_solution,
+            busca_local_func=busca_local,
+            perturbar_func=perturbar_solucao,
+            max_iter=30
+        )
+        elapsed = time.perf_counter() - t0
     else:
         print("Método inválido. Usando 'greedy' por padrão.")
         routes = construct_initial_solution(units_df, emergencies_df)
