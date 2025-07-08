@@ -741,8 +741,8 @@ if __name__ == "__main__":
     if modo == 'c':
         try:
             # Tenta carregar os arquivos CSV fornecidos
-            units_df = pd.read_csv('units_top10.csv')
-            emergencies_df = pd.read_csv('Emergencies_CSV_FormatRight.csv')
+            units_df = pd.read_csv('unidades.csv')
+            emergencies_df = pd.read_csv('emergencias.csv')
             
             # Converte colunas para numérico, tratando erros
             units_df['x'] = pd.to_numeric(units_df['x'], errors='coerce')
